@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 
 import org.helm.notation2.parser.exceptionparser.NotationException;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
+import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.GroupEntity;
 import org.helm.notation2.parser.notation.polymer.HELMEntity;
@@ -103,6 +104,10 @@ public final class ValidationMethod {
 				// mon = new MonomerNotationUnitRNA(str, type);
 				// }
 				mon = new MonomerNotationUnitRNA(str, type);
+			} else if (type == "CARB") {
+				// CARB monomers may be [monomer] or R<n>[monomer] where R<n> is a
+				// glycosidic linkage position (e.g. R4, R6)
+				mon = new MonomerNotationUnit(str, type);
 			} else if (type != "BLOB") {
 				if (str.length() > 1) {
 					if (!(str.startsWith("[") && str.endsWith("]"))) {
@@ -171,6 +176,8 @@ public final class ValidationMethod {
 			item = new BlobEntity(str.toUpperCase());
 		} else if (str.toUpperCase().matches("CHEM[1-9][0-9]*")) {
 			item = new ChemEntity(str.toUpperCase());
+		} else if (str.toUpperCase().matches("CARB[1-9][0-9]*")) {
+			item = new CarbEntity(str.toUpperCase());
 		} else if (str.toUpperCase().matches("G[1-9][0-9]*")) {
 			item = new GroupEntity(str.toUpperCase());
 		} else {

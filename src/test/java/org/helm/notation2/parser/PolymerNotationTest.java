@@ -27,6 +27,7 @@ import java.io.IOException;
 
 import org.helm.notation2.parser.exceptionparser.ExceptionState;
 import org.jdom2.JDOMException;
+import org.testng.Assert;
 import org.testng.annotations.Test;
 
 /**
@@ -37,6 +38,21 @@ import org.testng.annotations.Test;
 public class PolymerNotationTest {
 
   StateMachineParser parser;
+
+  @Test
+  public void testCARBPolymer() throws ExceptionState {
+    parser = new StateMachineParser();
+    // R4/R6 prefixes denote glycosidic linkage positions (C4 and C6 hydroxyl)
+    // on the preceding monosaccharide
+    String test = "CARB1{[β-D-Gal].R4[β-D-GlcNAc].R6[α-D-GalNAc]}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    Assert.assertEquals(parser.notationContainer.getListOfPolymers().size(), 1);
+    Assert.assertEquals(parser.notationContainer.getListOfPolymers().get(0).getPolymerElements().getListOfElements().size(), 3);
+  }
 
   /*
    * method to test unchanged input in the simple polymer section

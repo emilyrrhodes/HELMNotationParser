@@ -25,6 +25,7 @@ package org.helm.notation2.parser.polymer;
 
 import org.helm.notation2.parser.exceptionparser.NotationException;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
+import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.PeptideEntity;
 import org.helm.notation2.parser.notation.polymer.PolymerNotation;
@@ -68,6 +69,13 @@ public class PolymerNotationTest {
 
     PolymerNotation current = new PolymerNotation(name);
     Assert.assertTrue(current.getPolymerID() instanceof BlobEntity);
+  }
+
+  @Test
+  public void testPolymerNotationIDCARB() throws NotationException {
+    String name = "CARB1";
+    PolymerNotation current = new PolymerNotation(name);
+    Assert.assertTrue(current.getPolymerID() instanceof CarbEntity);
   }
 
   @Test(expectedExceptions = NotationException.class)

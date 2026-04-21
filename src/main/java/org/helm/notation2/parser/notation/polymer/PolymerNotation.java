@@ -103,7 +103,7 @@ public final class PolymerNotation {
    * only one Monomer is allowed
    */
   private void setPolymerElements() {
-    if (polymerID instanceof RNAEntity || polymerID instanceof PeptideEntity) {
+    if (polymerID instanceof RNAEntity || polymerID instanceof PeptideEntity || polymerID instanceof CarbEntity) {
       this.polymerElements = new PolymerListElements(polymerID);
     } else {
       this.polymerElements = new PolymerSingleElements(polymerID);

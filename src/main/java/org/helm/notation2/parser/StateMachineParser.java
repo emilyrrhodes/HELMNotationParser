@@ -102,7 +102,7 @@ public class StateMachineParser implements State {
    */
   public boolean checkPolymerId(String polymerId) {
     LOG.debug("Validation of polymerID: " + polymerId);
-    String pattern = "PEPTIDE[1-9][0-9]*|RNA[1-9][0-9]*|CHEM[1-9][0-9]*|BLOB[1-9][0-9]*";
+    String pattern = "PEPTIDE[1-9][0-9]*|RNA[1-9][0-9]*|CHEM[1-9][0-9]*|BLOB[1-9][0-9]*|CARB[1-9][0-9]*";
 
     Pattern p = Pattern.compile(pattern, Pattern.CASE_INSENSITIVE);
     Matcher m = p.matcher(polymerId);
@@ -126,7 +126,7 @@ public class StateMachineParser implements State {
   public boolean checkPolymeridConnection(String polymerId) {
     LOG.debug("Validation of polymerID in the connection section:");
     String ratio = "(:[1-9][0-9]*(\\.[0-9]+)?)?";
-    String id = "(PEPTIDE[1-9][0-9]*|RNA[1-9][0-9]*|CHEM[1-9][0-9]*|BLOB[1-9][0-9]*|G[1-9][0-9]*)";
+    String id = "(PEPTIDE[1-9][0-9]*|RNA[1-9][0-9]*|CHEM[1-9][0-9]*|BLOB[1-9][0-9]*|CARB[1-9][0-9]*|G[1-9][0-9]*)";
     String pattern = "(\\(" + id + ratio + "(," + id + ratio + ")+\\)" + ratio + "|" + id + ratio + ")";
     Pattern p = Pattern.compile(pattern,Pattern.CASE_INSENSITIVE);
     Matcher m  = p.matcher(polymerId);
@@ -195,7 +195,7 @@ public class StateMachineParser implements State {
    */
   public boolean checkDetailsGroup(String d) {
     LOG.debug("Validation of group's details:");
-    String id = "(PEPTIDE[1-9][0-9]*+|RNA[1-9][0-9]*|CHEM[1-9][0-9]*|BLOB[1-9][0-9]*|G[1-9][0-9]*)";
+    String id = "(PEPTIDE[1-9][0-9]*+|RNA[1-9][0-9]*|CHEM[1-9][0-9]*|BLOB[1-9][0-9]*|CARB[1-9][0-9]*|G[1-9][0-9]*)";
     String number = "[1-9][0-9]*(\\.[0-9]+)?";
     String ratio = number + "(-" + number + ")?";
     String pattern = id + "(:" + ratio + ")?((\\+|,)" + id + "(:" + ratio + ")?)+";
@@ -255,7 +255,7 @@ public class StateMachineParser implements State {
    */
   public boolean isPeptideOrRna() throws SimplePolymerSectionException {
     if (polymerElements.size() >= 1) {
-      if (polymerElements.get(polymerElements.size() - 1).matches("(PEPTIDE[1-9][0-9]*+|RNA[1-9][0-9]*)")) {
+      if (polymerElements.get(polymerElements.size() - 1).matches("(PEPTIDE[1-9][0-9]*+|RNA[1-9][0-9]*|CARB[1-9][0-9]*)")) {
         return true;
       }
       return false;
