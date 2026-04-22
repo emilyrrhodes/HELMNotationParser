@@ -44,7 +44,7 @@ public class PolymerNotationTest {
     parser = new StateMachineParser();
     // R4/R6 prefixes denote glycosidic linkage positions (C4 and C6 hydroxyl)
     // on the preceding monosaccharide
-    String test = "CARB1{[β-D-Gal].R4[β-D-GlcNAc].R6[α-D-GalNAc]}$$$$";
+    String test = "CARB1{[b-D-Gal].R4[b-D-GlcNAc].R6[a-D-GalNAc]}$$$$";
 
     for (int i = 0; i < test.length(); ++i) {
       parser.doAction(test.charAt(i));

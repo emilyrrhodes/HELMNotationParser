@@ -3,34 +3,34 @@ package org.helm.notation2.parser.notation.polymer;
 /**
  * Parsed representation of a carbohydrate monomer identifier.
  *
- * A CARB monomer ID like "β-D-Gal" is composed of three parts:
- *   anomericity    – α or β (configuration at the anomeric C1 carbon)
- *   stereochemistry – D or L (absolute configuration of the sugar)
- *   baseName       – the core monosaccharide abbreviation (e.g. Gal, GlcNAc)
+ * A CARB monomer ID like "b-D-Gal" is composed of three parts:
+ *   anomer                – a or b (configuration at the anomeric C1 carbon)
+ *   absoluteConfiguration – D or L (absolute configuration of the sugar)
+ *   baseName              – the core monosaccharide abbreviation (e.g. Gal, GlcNAc)
  *
  * Identifiers without qualifiers (e.g. "Gal") are also accepted; in that
- * case anomericity and stereochemistry are null.
+ * case anomer and absoluteConfiguration are null.
  */
 public class CarbMonomerNotation {
 
-  private final String anomericity;
-  private final String stereochemistry;
+  private final String anomer;
+  private final String absoluteConfiguration;
   private final String baseName;
 
-  public CarbMonomerNotation(String anomericity, String stereochemistry, String baseName) {
-    this.anomericity = anomericity;
-    this.stereochemistry = stereochemistry;
+  public CarbMonomerNotation(String anomer, String absoluteConfiguration, String baseName) {
+    this.anomer = anomer;
+    this.absoluteConfiguration = absoluteConfiguration;
     this.baseName = baseName;
   }
 
-  /** α or β, or null if not specified. */
-  public String getAnomericity() {
-    return anomericity;
+  /** a or b, or null if not specified. */
+  public String getAnomer() {
+    return anomer;
   }
 
   /** D or L, or null if not specified. */
-  public String getStereochemistry() {
-    return stereochemistry;
+  public String getAbsoluteConfiguration() {
+    return absoluteConfiguration;
   }
 
   /** Core monosaccharide name, e.g. "Gal", "GlcNAc", "GalNAc". */
@@ -40,8 +40,8 @@ public class CarbMonomerNotation {
 
   @Override
   public String toString() {
-    if (anomericity != null && stereochemistry != null) {
-      return anomericity + "-" + stereochemistry + "-" + baseName;
+    if (anomer != null && absoluteConfiguration != null) {
+      return anomer + "-" + absoluteConfiguration + "-" + baseName;
     }
     return baseName;
   }

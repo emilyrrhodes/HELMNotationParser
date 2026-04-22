@@ -9,25 +9,25 @@ import org.helm.notation2.parser.exceptionparser.NotationException;
  * Parses carbohydrate monomer identifiers into their constituent parts.
  *
  * Supported formats:
- *   β-D-Gal      → anomericity=β, stereochemistry=D, baseName=Gal
- *   α-D-GalNAc   → anomericity=α, stereochemistry=D, baseName=GalNAc
- *   Gal          → anomericity=null, stereochemistry=null, baseName=Gal
+ *   b-D-Gal      → anomer=b, absoluteConfiguration=D, baseName=Gal
+ *   a-D-GalNAc   → anomer=a, absoluteConfiguration=D, baseName=GalNAc
+ *   Gal          → anomer=null, absoluteConfiguration=null, baseName=Gal
  *
- * The R{@literal <n>} linkage-position prefix (e.g. "R4" in "R4[β-D-GlcNAc]") must be
+ * The R{@literal <n>} linkage-position prefix (e.g. "R4" in "R4[b-D-GlcNAc]") must be
  * stripped by the caller before passing the ID to this parser.
  */
 public class CarbMonomerParser {
 
-  // Optional "α-D-" or "β-L-" prefix, followed by the base monomer name
+  // Optional "a-D-" or "b-L-" prefix, followed by the base monomer name
   private static final Pattern PATTERN =
-      Pattern.compile("^([αβ])-([DL])-(.+)$");
+      Pattern.compile("^([ab])-([DL])-(.+)$");
 
   private CarbMonomerParser() {}
 
   /**
    * Parses a carbohydrate monomer ID into its components.
    *
-   * @param id the monomer identifier, e.g. "β-D-Gal" or "Gal"
+   * @param id the monomer identifier, e.g. "b-D-Gal" or "Gal"
    * @return parsed CarbMonomerNotation
    * @throws NotationException if the string does not match any recognised format
    */
