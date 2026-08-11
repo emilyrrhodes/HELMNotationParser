@@ -56,6 +56,9 @@ public final class PolymerNotation {
   @JsonIgnore
   private Map<String, String> mapIntraConnection = new HashMap<String, String>();;
 
+  @JsonIgnore
+  private List<CarbEdge> carbEdges = new ArrayList<CarbEdge>();
+
   public PolymerNotation() {
 
   }
@@ -205,6 +208,23 @@ public final class PolymerNotation {
   }
 
   public void initializeMapOfMonomersAndMapOfIntraConnection() {
+    mapOfMonomers.clear();
+    mapIntraConnection.clear();
+    if (polymerID instanceof CarbEntity) {
+      carbEdges.clear();
+      List<CarbMonomerNotationUnit> chain = new ArrayList<CarbMonomerNotationUnit>();
+      for (MonomerNotation element : polymerElements.getListOfElements()) {
+        if (!(element instanceof CarbMonomerNotationUnit)) {
+          throw new IllegalStateException(
+              "CARB polymer element is not a CarbMonomerNotationUnit (found "
+                  + element.getClass().getSimpleName() + "); CARB does not support "
+                  + "group/mixture/list monomer syntax: " + element);
+        }
+        chain.add((CarbMonomerNotationUnit) element);
+      }
+      numberCarbChain(chain, new int[] {0}, 0);
+      return;
+    }
     int multiply = 1;
     int value = 0;
     int lastValue = -1;
@@ -264,9 +284,68 @@ public final class PolymerNotation {
     }
   }
 
+  /**
+   * Numbers one sequential CARB chain - either the polymer's top-level list,
+   * or a branch's own chain - depth-first in text order, and records every
+   * intra-polymer R-group edge (main-chain and branch-convergence) into
+   * {@link #mapIntraConnection}. Descends into each monomer's own branches
+   * immediately after numbering it and before moving on to the next chain
+   * element, matching how branches are written directly after the trunk
+   * monomer they attach to (see {@link CarbMonomerNotationParser}).
+   *
+   * @param chain the chain to number
+   * @param counter single-element mutable holder for the next position to
+   *          assign, shared across the whole recursive walk
+   * @param precedingPosition position of the monomer whose own anomeric
+   *          carbon bonds into the first element of {@code chain}, or 0 if
+   *          there is none (the very first monomer of the polymer, or the
+   *          first monomer of a branch)
+   * @return the position assigned to the last element of {@code chain}
+   */
+  private int numberCarbChain(List<CarbMonomerNotationUnit> chain, int[] counter, int precedingPosition) {
+    int lastPosition = precedingPosition;
+    for (CarbMonomerNotationUnit unit : chain) {
+      counter[0]++;
+      int position = counter[0];
+      mapOfMonomers.put(position, unit);
+
+      if (lastPosition != 0) {
+        CarbMonomerNotationUnit previous = (CarbMonomerNotationUnit) mapOfMonomers.get(lastPosition);
+        String outgoing = previous.getAnomericRGroup();
+        String incoming = unit.getIncomingRGroup() == null ? "R1" : unit.getIncomingRGroup();
+        mapIntraConnection.put(lastPosition + "$" + outgoing, "");
+        mapIntraConnection.put(position + "$" + incoming, "");
+        carbEdges.add(new CarbEdge(lastPosition, outgoing, position, incoming));
+      }
+
+      for (CarbBranch branch : unit.getBranches()) {
+        int branchLastPosition = numberCarbChain(branch.getChain(), counter, 0);
+        CarbMonomerNotationUnit branchLastUnit = (CarbMonomerNotationUnit) mapOfMonomers.get(branchLastPosition);
+        mapIntraConnection.put(branchLastPosition + "$" + branchLastUnit.getAnomericRGroup(), "");
+        mapIntraConnection.put(position + "$" + branch.getConvergenceRGroup(), "");
+        carbEdges.add(new CarbEdge(branchLastPosition, branchLastUnit.getAnomericRGroup(), position, branch.getConvergenceRGroup()));
+      }
+
+      lastPosition = position;
+    }
+    return lastPosition;
+  }
+
   @JsonIgnore
   public Map<String, String> getMapIntraConnection() {
     return mapIntraConnection;
+  }
+
+  /**
+   * method to get the resolved intra-polymer bond graph for a CARB polymer -
+   * empty for every other polymer type.
+   *
+   * @return list of intra-polymer edges, in the order they were parsed
+   */
+  @JsonIgnore
+  public List<CarbEdge> getCarbEdges() {
+    initializeMapOfMonomersAndMapOfIntraConnection();
+    return carbEdges;
   }
 
   @JsonIgnore
@@ -275,6 +354,8 @@ public final class PolymerNotation {
     for (MonomerNotation monomerNotation : polymerElements.getListOfElements()) {
       if (monomerNotation instanceof MonomerNotationUnit) {
         listMonomerNotation.add(monomerNotation);
+      } else if (monomerNotation instanceof CarbMonomerNotationUnit) {
+        collectCarbMonomers((CarbMonomerNotationUnit) monomerNotation, listMonomerNotation);
       } else {
         if (monomerNotation instanceof MonomerNotationGroup) {
           for (MonomerNotationGroupElement groupElement : ((MonomerNotationGroup) monomerNotation).getListOfElements()) {
@@ -287,6 +368,22 @@ public final class PolymerNotation {
       }
     }
     return listMonomerNotation;
+  }
+
+  /**
+   * Recursively collects one CARB monomer and every monomer nested in its
+   * branches (and their nested branches), depth-first in text order, so that
+   * callers that need every monomer of a polymer - e.g. for monomer
+   * validation - see branch-nested CARB monomers too, not just the top-level
+   * chain.
+   */
+  private void collectCarbMonomers(CarbMonomerNotationUnit unit, List<MonomerNotation> collected) {
+    collected.add(unit);
+    for (CarbBranch branch : unit.getBranches()) {
+      for (CarbMonomerNotationUnit branchUnit : branch.getChain()) {
+        collectCarbMonomers(branchUnit, collected);
+      }
+    }
   }
 
 }

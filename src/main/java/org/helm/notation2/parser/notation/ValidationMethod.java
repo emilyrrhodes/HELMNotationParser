@@ -29,6 +29,7 @@ import java.util.regex.Pattern;
 import org.helm.notation2.parser.exceptionparser.NotationException;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
 import org.helm.notation2.parser.notation.polymer.CarbEntity;
+import org.helm.notation2.parser.notation.polymer.CarbMonomerNotationParser;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.GroupEntity;
 import org.helm.notation2.parser.notation.polymer.HELMEntity;
@@ -68,6 +69,20 @@ public final class ValidationMethod {
 	 */
 	public static MonomerNotation decideWhichMonomerNotation(String str, String type)
 			throws NotationException {
+		if (type.equals("CARB")) {
+			/*
+			 * CARB monomers carry a leading "R<n>:" attachment prefix, an
+			 * optional trailing ":R<n>" anomeric override, and zero or more
+			 * trailing "(...)" branches, so the generic bracket-only check
+			 * below does not apply to them. Dispatch here, before the
+			 * "(...)"-group check, since CARB's grammar never legally starts
+			 * a token with "(" - a leading "(" (e.g. a mistakenly-written
+			 * ambiguity group) is rejected by parseToken itself with a clear
+			 * NotationException, since a valid token is only ever
+			 * "R<n>:"-prefixed or starts with "[".
+			 */
+			return CarbMonomerNotationParser.parseToken(str, type);
+		}
 		MonomerNotation mon;
 		/* group ? */
 		if (str.startsWith("(") && str.endsWith(")")) {
@@ -85,7 +100,7 @@ public final class ValidationMethod {
 					mon = new MonomerNotationList(str2, type);
 				} else {
 					/* monomer unit is just in brackets */
-					if (type == "RNA") {
+					if (type.equals("RNA")) {
 						mon = new MonomerNotationUnitRNA(str2, type);
 					} else {
 						if (str2.length() > 1) {
@@ -99,16 +114,12 @@ public final class ValidationMethod {
 
 			}
 		} else {
-			if (type == "RNA") {
+			if (type.equals("RNA")) {
 				// if (str.startsWith("[") && str.endsWith("]")) {
 				// mon = new MonomerNotationUnitRNA(str, type);
 				// }
 				mon = new MonomerNotationUnitRNA(str, type);
-			} else if (type == "CARB") {
-				// CARB monomers may be [monomer] or R<n>[monomer] where R<n> is a
-				// glycosidic linkage position (e.g. R4, R6)
-				mon = new MonomerNotationUnit(str, type);
-			} else if (type != "BLOB") {
+			} else if (!type.equals("BLOB")) {
 				if (str.length() > 1) {
 					if (!(str.startsWith("[") && str.endsWith("]"))) {
 						throw new NotationException("Monomers have to be in brackets: " + str);

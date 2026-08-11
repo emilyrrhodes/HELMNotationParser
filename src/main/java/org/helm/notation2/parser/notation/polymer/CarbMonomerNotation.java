@@ -43,6 +43,9 @@ public class CarbMonomerNotation {
     if (anomer != null && absoluteConfiguration != null) {
       return anomer + "-" + absoluteConfiguration + "-" + baseName;
     }
+    if (anomer != null) {
+      return anomer + "-" + baseName;
+    }
     return baseName;
   }
 
