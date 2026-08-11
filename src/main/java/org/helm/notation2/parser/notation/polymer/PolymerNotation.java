@@ -212,17 +212,27 @@ public final class PolymerNotation {
     mapIntraConnection.clear();
     if (polymerID instanceof CarbEntity) {
       carbEdges.clear();
-      List<CarbMonomerNotationUnit> chain = new ArrayList<CarbMonomerNotationUnit>();
+      int[] counter = new int[] {0};
+      int precedingPosition = 0;
       for (MonomerNotation element : polymerElements.getListOfElements()) {
-        if (!(element instanceof CarbMonomerNotationUnit)) {
+        if (element instanceof CarbMonomerNotationUnit) {
+          precedingPosition = numberCarbUnit((CarbMonomerNotationUnit) element, counter, precedingPosition);
+        } else if (element instanceof CarbRepeat) {
+          precedingPosition = numberCarbRepeat((CarbRepeat) element, counter, precedingPosition);
+        } else if (element instanceof MonomerNotationGroup) {
+          // An ambiguous mixture "(A+B)" / or-group "(A,B)" is given a position so it
+          // can be referenced, but its connectivity is unresolvable, so no edge is
+          // emitted and the edge chain is broken (precedingPosition = 0). The builder
+          // rejects such a polymer as a build-time dead end.
+          counter[0]++;
+          mapOfMonomers.put(counter[0], element);
+          precedingPosition = 0;
+        } else {
           throw new IllegalStateException(
-              "CARB polymer element is not a CarbMonomerNotationUnit (found "
-                  + element.getClass().getSimpleName() + "); CARB does not support "
-                  + "group/mixture/list monomer syntax: " + element);
+              "CARB polymer element is not a CarbMonomerNotationUnit, CarbRepeat, or ambiguity group (found "
+                  + element.getClass().getSimpleName() + "): " + element);
         }
-        chain.add((CarbMonomerNotationUnit) element);
       }
-      numberCarbChain(chain, new int[] {0}, 0);
       return;
     }
     int multiply = 1;
@@ -305,30 +315,104 @@ public final class PolymerNotation {
   private int numberCarbChain(List<CarbMonomerNotationUnit> chain, int[] counter, int precedingPosition) {
     int lastPosition = precedingPosition;
     for (CarbMonomerNotationUnit unit : chain) {
-      counter[0]++;
-      int position = counter[0];
-      mapOfMonomers.put(position, unit);
+      lastPosition = numberCarbUnit(unit, counter, lastPosition);
+    }
+    return lastPosition;
+  }
 
-      if (lastPosition != 0) {
-        CarbMonomerNotationUnit previous = (CarbMonomerNotationUnit) mapOfMonomers.get(lastPosition);
+  /**
+   * Numbers a single CARB monomer: assigns it the next position, records the
+   * main-chain edge from {@code precedingPosition} into it (unless it is the
+   * first monomer, i.e. {@code precedingPosition == 0}), then descends into its
+   * branches and records each branch-convergence edge.
+   *
+   * @param unit the monomer to number
+   * @param counter shared next-position holder
+   * @param precedingPosition position of the monomer whose anomeric carbon bonds
+   *          into {@code unit}, or 0 if none
+   * @return the position assigned to {@code unit}
+   */
+  private int numberCarbUnit(CarbMonomerNotationUnit unit, int[] counter, int precedingPosition) {
+    counter[0]++;
+    int position = counter[0];
+    mapOfMonomers.put(position, unit);
+
+    // An unknown monomer ("X"/"*"/"?") has no connection points, so no main-chain
+    // bond can be resolved into or out of it - skip the edge (the chain is broken
+    // here, and the builder rejects the polymer as unbuildable anyway).
+    if (precedingPosition != 0 && !unit.isUnknown()) {
+      CarbMonomerNotationUnit previous = (CarbMonomerNotationUnit) mapOfMonomers.get(precedingPosition);
+      if (!previous.isUnknown()) {
         String outgoing = previous.getAnomericRGroup();
         String incoming = unit.getIncomingRGroup() == null ? "R1" : unit.getIncomingRGroup();
-        mapIntraConnection.put(lastPosition + "$" + outgoing, "");
+        mapIntraConnection.put(precedingPosition + "$" + outgoing, "");
         mapIntraConnection.put(position + "$" + incoming, "");
-        carbEdges.add(new CarbEdge(lastPosition, outgoing, position, incoming));
+        carbEdges.add(new CarbEdge(precedingPosition, outgoing, position, incoming));
       }
+    }
 
-      for (CarbBranch branch : unit.getBranches()) {
-        int branchLastPosition = numberCarbChain(branch.getChain(), counter, 0);
-        CarbMonomerNotationUnit branchLastUnit = (CarbMonomerNotationUnit) mapOfMonomers.get(branchLastPosition);
+    for (CarbBranch branch : unit.getBranches()) {
+      int branchLastPosition = numberCarbChain(branch.getChain(), counter, 0);
+      CarbMonomerNotationUnit branchLastUnit = (CarbMonomerNotationUnit) mapOfMonomers.get(branchLastPosition);
+      // A branch that ends in an unknown monomer has no anomeric carbon to converge
+      // onto the trunk - skip the convergence edge.
+      if (!branchLastUnit.isUnknown()) {
         mapIntraConnection.put(branchLastPosition + "$" + branchLastUnit.getAnomericRGroup(), "");
         mapIntraConnection.put(position + "$" + branch.getConvergenceRGroup(), "");
         carbEdges.add(new CarbEdge(branchLastPosition, branchLastUnit.getAnomericRGroup(), position, branch.getConvergenceRGroup()));
       }
+    }
 
-      lastPosition = position;
+    return position;
+  }
+
+  /**
+   * Numbers a CARB repeating group. For an <em>integer</em> count the repeated
+   * sub-chain is expanded that many times into concrete numbered monomers, with
+   * each repetition's last-monomer anomeric carbon chained into the next
+   * repetition's first-monomer incoming R-group (and the whole run chained onto
+   * {@code precedingPosition}), so the expanded structure is fully wired for the
+   * builder. For a <em>non-integer</em> count (a range, or {@code n}) the count
+   * is unknown, so the sub-chain is numbered once - purely so its monomers have
+   * stable position references - but NO edges are emitted through it; the
+   * molecule builder rejects such a repeat as a build-time dead end (see
+   * {@link CarbRepeat#hasIntegerCount()}).
+   *
+   * @param repeat the repeating group
+   * @param counter shared next-position holder
+   * @param precedingPosition position of the monomer whose anomeric carbon bonds
+   *          into the first monomer of the (first) repetition, or 0 if none
+   * @return the position of the last numbered monomer of the run, or 0 for a
+   *         non-integer count (so a following monomer is not spuriously wired
+   *         onto an unexpanded repeat)
+   */
+  private int numberCarbRepeat(CarbRepeat repeat, int[] counter, int precedingPosition) {
+    if (!repeat.hasIntegerCount()) {
+      numberCarbChainNoEdges(repeat.getChain(), counter);
+      return 0;
+    }
+    int times = Integer.parseInt(repeat.getCount().trim());
+    int lastPosition = precedingPosition;
+    for (int k = 0; k < times; k++) {
+      lastPosition = numberCarbChain(repeat.getChain(), counter, lastPosition);
     }
     return lastPosition;
+  }
+
+  /**
+   * Assigns positions to every monomer of {@code chain} (depth-first, including
+   * branch-nested monomers) without recording any edges - used for a repeating
+   * group whose count is not a concrete integer, where the connectivity cannot
+   * be resolved but the monomers still need position references.
+   */
+  private void numberCarbChainNoEdges(List<CarbMonomerNotationUnit> chain, int[] counter) {
+    for (CarbMonomerNotationUnit unit : chain) {
+      counter[0]++;
+      mapOfMonomers.put(counter[0], unit);
+      for (CarbBranch branch : unit.getBranches()) {
+        numberCarbChainNoEdges(branch.getChain(), counter);
+      }
+    }
   }
 
   @JsonIgnore
@@ -351,6 +435,17 @@ public final class PolymerNotation {
   @JsonIgnore
   public List<MonomerNotation> getListMonomers() {
     List<MonomerNotation> listMonomerNotation = new ArrayList<MonomerNotation>();
+    if (polymerID instanceof CarbEntity) {
+      // Derive the CARB monomer list straight from the position numbering, so it
+      // stays aligned 1:1 with the CarbEdge positions and with the builder's
+      // "position = index + 1" convention - including monomers produced by
+      // expanding an integer repeating group. Positions are contiguous from 1.
+      initializeMapOfMonomersAndMapOfIntraConnection();
+      for (int position = 1; mapOfMonomers.containsKey(position); position++) {
+        listMonomerNotation.add(mapOfMonomers.get(position));
+      }
+      return listMonomerNotation;
+    }
     for (MonomerNotation monomerNotation : polymerElements.getListOfElements()) {
       if (monomerNotation instanceof MonomerNotationUnit) {
         listMonomerNotation.add(monomerNotation);

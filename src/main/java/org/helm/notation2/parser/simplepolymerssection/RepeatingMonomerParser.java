@@ -60,25 +60,27 @@ public class RepeatingMonomerParser implements State {
     /* repeating information is finished */
     if (cha == '\'') {
       if (_parser.checkRepeating(repeating)) {
-        String[] range = repeating.split("-");
-        int first = Integer.parseInt(range[0]);
-        if (range.length > 1) {
-          int second = Integer.parseInt(range[1]);
-          /* range is wrong */
-          if (second - first <= 0) {
-            LOG.error("Information about repeating is wrong: " + repeating);
-            throw new SimplePolymerSectionException("Information about repeating is wrong: " + repeating);
-          } else {
-            LOG.info("Monomer unit is repeated:");
-            _parser.notationContainer.getCurrentPolymer().getPolymerElements().getCurrentMonomerNotation().setCount(repeating);
-            _parser.setState(new BetweenMonomerParser(_parser));
+        /*
+         * An open-ended count ("n" or "<int>-n", per the CARB proposal) has no
+         * concrete numeric upper bound to validate - accept it verbatim; it is a
+         * build-time dead end downstream. Only a fully-numeric range needs its
+         * bounds checked here.
+         */
+        if (!repeating.contains("n")) {
+          String[] range = repeating.split("-");
+          if (range.length > 1) {
+            int first = Integer.parseInt(range[0]);
+            int second = Integer.parseInt(range[1]);
+            /* range is wrong */
+            if (second - first <= 0) {
+              LOG.error("Information about repeating is wrong: " + repeating);
+              throw new SimplePolymerSectionException("Information about repeating is wrong: " + repeating);
+            }
           }
-
-        } else {
-          LOG.info("Monomer unit is repeated:");
-          _parser.notationContainer.getCurrentPolymer().getPolymerElements().getCurrentMonomerNotation().setCount(repeating);
-          _parser.setState(new BetweenMonomerParser(_parser));
         }
+        LOG.info("Monomer unit is repeated:");
+        _parser.notationContainer.getCurrentPolymer().getPolymerElements().getCurrentMonomerNotation().setCount(repeating);
+        _parser.setState(new BetweenMonomerParser(_parser));
 
       } else {
         LOG.error("Information about repeating is wrong: " + repeating);

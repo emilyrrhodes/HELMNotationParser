@@ -37,6 +37,9 @@ public final class CarbMonomerNotationParser {
 
   private static final Pattern BARE_R = Pattern.compile("^[Rr](?:\\d+|\\?)$");
 
+  /** A fully-unknown monomer: "X" (a single unknown residue), "*" (0..n), or "?" (unknown). Per the proposal these carry no connection points. */
+  private static final Pattern UNKNOWN_MONOMER = Pattern.compile("^[Xx*?]$");
+
   private CarbMonomerNotationParser() {
   }
 
@@ -50,6 +53,13 @@ public final class CarbMonomerNotationParser {
    * @throws NotationException if the token does not follow CARB grammar
    */
   public static CarbMonomerNotationUnit parseToken(String token, String type) throws NotationException {
+    // A fully-unknown monomer ("X"/"*"/"?") stands alone: no leading "R<n>:"
+    // attachment, no brackets, no anomeric override, no branches. It carries no
+    // connection points, so it participates in no bonds (see numbering).
+    if (UNKNOWN_MONOMER.matcher(token).matches()) {
+      return new CarbMonomerNotationUnit(token, type, null, null, true);
+    }
+
     String remainder = token;
 
     String incomingRGroup = null;
@@ -70,7 +80,11 @@ public final class CarbMonomerNotationParser {
     remainder = remainder.substring(closeBracket + 1);
 
     // Fails fast on malformed residue content (e.g. "[]", "[???]") that the
-    // bracket-only check above does not catch.
+    // bracket-only check above does not catch. The parsed anomer/absolute-
+    // configuration/base-name decomposition is intentionally transient - it is
+    // used only to validate the residue's shape here; downstream code re-derives
+    // the base name from the raw residue when it needs it (see the toolkit's
+    // Validation.resolveCarbMonomer), so nothing is stored on the unit.
     CarbMonomerParser.parse(residue.substring(1, residue.length() - 1));
 
     String anomericRGroup = null;
@@ -97,6 +111,32 @@ public final class CarbMonomerNotationParser {
     }
 
     return unit;
+  }
+
+  /**
+   * Parses a bare CARB chain - a "." separated sequence of monomer tokens with
+   * NO trailing convergence R-group (unlike a branch) - into its ordered list of
+   * monomer nodes. Used for a repeating group's repeated sub-chain, whose content
+   * is a plain chain (see {@link CarbRepeat}).
+   *
+   * @param content the chain text, e.g. "R4:[a-D-Glcp].R3:[a-D-Glcp]"
+   * @param type polymer type, always "CARB"
+   * @return the ordered monomer nodes of the chain
+   * @throws NotationException if the chain is empty or any token is malformed
+   */
+  public static List<CarbMonomerNotationUnit> parseChain(String content, String type) throws NotationException {
+    List<String> segments = splitTopLevel(content);
+    List<CarbMonomerNotationUnit> chain = new ArrayList<CarbMonomerNotationUnit>();
+    for (String segment : segments) {
+      if (segment.isEmpty()) {
+        throw new NotationException("CARB chain has an empty monomer token: (" + content + ")");
+      }
+      chain.add(parseToken(segment, type));
+    }
+    if (chain.isEmpty()) {
+      throw new NotationException("CARB chain has no monomers: (" + content + ")");
+    }
+    return chain;
   }
 
   /**

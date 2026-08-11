@@ -40,10 +40,12 @@ public class PolymerNotationTest {
   StateMachineParser parser;
 
   @Test
-  public void testCARBPolymer() throws ExceptionState {
+  public void testCARBPolymer() throws ExceptionState, org.helm.notation2.parser.exceptionparser.NotationException {
     parser = new StateMachineParser();
-    // R4:/R6: prefixes denote the glycosidic linkage position (C4/C6 hydroxyl)
-    // on the preceding monosaccharide that the next monomer's anomeric carbon bonds into
+    // An Rn: prefix names the hydroxyl on the monomer it PRECEDES (the following
+    // one), into which the anomeric carbon (R1 by default) of the PRECEDING monomer
+    // bonds. So in "[a-D-Glcp].R4:[a-D-Glcp]", the R4 hydroxyl belongs to the second
+    // Glcp and the bond is (first Glcp)$R1 -> (second Glcp)$R4.
     String test = "CARB1{[a-D-Glcp].R4:[a-D-Glcp].R6:[a-L-Galp].R3:[a-D-Glcp]}$$$$";
 
     for (int i = 0; i < test.length(); ++i) {
@@ -51,7 +53,27 @@ public class PolymerNotationTest {
     }
 
     Assert.assertEquals(parser.notationContainer.getListOfPolymers().size(), 1);
-    Assert.assertEquals(parser.notationContainer.getListOfPolymers().get(0).getPolymerElements().getListOfElements().size(), 4);
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.getPolymerElements().getListOfElements().size(), 4);
+
+    // Lock the glycosidic bond DIRECTION, not just the edge count: a mass/formula
+    // check cannot catch a swapped source/target attachment point. Each edge must
+    // run from the preceding monomer's anomeric carbon (R1) into the following
+    // monomer's named hydroxyl (R4, then R6, then R3).
+    java.util.List<org.helm.notation2.parser.notation.polymer.CarbEdge> edges = polymer.getCarbEdges();
+    Assert.assertEquals(edges.size(), 3);
+    assertEdge(edges.get(0), 1, "R1", 2, "R4");
+    assertEdge(edges.get(1), 2, "R1", 3, "R6");
+    assertEdge(edges.get(2), 3, "R1", 4, "R3");
+  }
+
+  private static void assertEdge(org.helm.notation2.parser.notation.polymer.CarbEdge edge,
+      int sourcePosition, String sourceRGroup, int targetPosition, String targetRGroup) {
+    Assert.assertEquals(edge.getSourcePosition(), sourcePosition, "source position");
+    Assert.assertEquals(edge.getSourceRGroup(), sourceRGroup, "source R-group");
+    Assert.assertEquals(edge.getTargetPosition(), targetPosition, "target position");
+    Assert.assertEquals(edge.getTargetRGroup(), targetRGroup, "target R-group");
   }
 
   @Test
@@ -68,7 +90,8 @@ public class PolymerNotationTest {
   }
 
   @Test
-  public void testCARBPolymerKetoseAnomericOverride() throws ExceptionState {
+  public void testCARBPolymerKetoseAnomericOverride() throws ExceptionState,
+      org.helm.notation2.parser.exceptionparser.NotationException {
     parser = new StateMachineParser();
     // the middle monomer's own anomeric carbon is R2 (a ketose), not the default R1
     String inner = "[a-D-Glcp].R4:[a-D-Fruf]:R2.R2:[a-L-Galp]";
@@ -78,7 +101,44 @@ public class PolymerNotationTest {
       parser.doAction(test.charAt(i));
     }
 
-    Assert.assertEquals(parser.notationContainer.getListOfPolymers().get(0).toHELM2(), inner);
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+
+    // The ketose override must change the SOURCE anomeric R-group of the bond
+    // leaving the Fruf (position 2): the first bond enters Fruf's R4 hydroxyl from
+    // Glcp's default R1 anomeric; the second bond LEAVES Fruf via its R2 anomeric
+    // (not the default R1) into Galp's R2 hydroxyl.
+    java.util.List<org.helm.notation2.parser.notation.polymer.CarbEdge> edges = polymer.getCarbEdges();
+    Assert.assertEquals(edges.size(), 2);
+    assertEdge(edges.get(0), 1, "R1", 2, "R4");
+    assertEdge(edges.get(1), 2, "R2", 3, "R2");
+  }
+
+  @Test
+  public void testCARBPolymerBranchConvergenceEdge() throws ExceptionState,
+      org.helm.notation2.parser.exceptionparser.NotationException {
+    parser = new StateMachineParser();
+    // A trunk of two monomers joined (1->4), with a third monomer branching onto
+    // the second: "([a-D-Glcp].R2)" means the branch monomer's anomeric carbon (R1)
+    // converges onto the trunk monomer's R2 hydroxyl.
+    String inner = "[a-D-Glcp].R4:[a-D-Glcp]([a-D-Glcp].R2)";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+
+    java.util.List<org.helm.notation2.parser.notation.polymer.CarbEdge> edges = polymer.getCarbEdges();
+    Assert.assertEquals(edges.size(), 2);
+    // main-chain bond: trunk monomer 1's anomeric R1 into trunk monomer 2's R4
+    assertEdge(edges.get(0), 1, "R1", 2, "R4");
+    // branch-convergence bond: branch monomer 3's anomeric R1 into trunk monomer 2's R2
+    assertEdge(edges.get(1), 3, "R1", 2, "R2");
   }
 
   /*
@@ -121,6 +181,76 @@ public class PolymerNotationTest {
     Assert.assertEquals(polymer.toHELM2(), inner);
   }
 
+  @Test
+  public void testCARBRepeatIntegerExpansion() throws ExceptionState,
+      org.helm.notation2.parser.exceptionparser.NotationException {
+    parser = new StateMachineParser();
+    // one lead monomer, then a 2-unit sub-chain repeated twice; the repeat's
+    // first monomer carries its own connecting group (R4) so each repetition
+    // chains onto whatever precedes it
+    String inner = "[a-D-Glcp].(R4:[a-D-Glcp].R3:[a-D-Glcp])'2'";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+
+    polymer.initializeMapOfMonomersAndMapOfIntraConnection();
+    // the repeat expands to 4 monomers, plus the 1 lead monomer = 5
+    for (int position = 1; position <= 5; position++) {
+      Assert.assertNotNull(polymer.getMonomerNotation(position), "Missing monomer at position " + position);
+    }
+    Assert.assertNull(polymer.getMonomerNotation(6));
+
+    java.util.List<org.helm.notation2.parser.notation.polymer.CarbEdge> edges = polymer.getCarbEdges();
+    Assert.assertEquals(edges.size(), 4);
+    assertEdge(edges.get(0), 1, "R1", 2, "R4"); // lead -> first repetition, unit 1
+    assertEdge(edges.get(1), 2, "R1", 3, "R3"); // within first repetition
+    assertEdge(edges.get(2), 3, "R1", 4, "R4"); // first repetition -> second repetition
+    assertEdge(edges.get(3), 4, "R1", 5, "R3"); // within second repetition
+  }
+
+  @Test
+  public void testCARBRepeatRoundTripWithBranch() throws ExceptionState {
+    parser = new StateMachineParser();
+    // a repeating group whose repeated sub-chain itself contains a branch
+    String inner = "([a-D-Glcp].R3:[a-D-Glcp]([a-D-Glcp].R2))'3'";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    Assert.assertEquals(parser.notationContainer.getListOfPolymers().get(0).toHELM2(), inner);
+  }
+
+  @Test
+  public void testCARBRepeatNonIntegerCountEmitsNoEdges() throws ExceptionState,
+      org.helm.notation2.parser.exceptionparser.NotationException {
+    parser = new StateMachineParser();
+    // an open-ended repeat count ("n") is valid notation and round-trips, but its
+    // connectivity is unknown, so it numbers its monomers yet emits no edges - a
+    // build-time dead end
+    String inner = "([a-D-Glcp].R4:[a-D-Glcp])'n'";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+    Assert.assertNotNull(polymer.getMonomerNotation(1));
+    Assert.assertNotNull(polymer.getMonomerNotation(2));
+    Assert.assertNull(polymer.getMonomerNotation(3));
+    Assert.assertEquals(polymer.getCarbEdges().size(), 0);
+  }
+
   @Test(expectedExceptions = org.helm.notation2.parser.exceptionparser.NotationException.class)
   public void testCARBPolymerMissingColonIsRejected() throws ExceptionState {
     parser = new StateMachineParser();
@@ -132,18 +262,85 @@ public class PolymerNotationTest {
     }
   }
 
-  @Test(expectedExceptions = org.helm.notation2.parser.exceptionparser.NotationException.class)
-  public void testCARBPolymerGroupSyntaxIsRejected() throws ExceptionState {
+  @Test
+  public void testCARBPolymerUnknownMonomer() throws ExceptionState {
     parser = new StateMachineParser();
-    // "(...)" ambiguity group/mixture syntax is not part of CARB's grammar -
-    // branching is handled separately via CarbBranch - and must be rejected
-    // with a clear NotationException rather than crashing later with a
-    // ClassCastException when the polymer's monomer graph is resolved.
-    String test = "CARB1{(R1:[a-D-Glcp]+R1:[b-D-Glcp])}$$$$";
+    // "*" is a fully-unknown monomer (count 0..n) with no connection points; a
+    // lone unknown polymer body must parse, round-trip, number its one position,
+    // and emit no edges.
+    String test = "CARB1{*}$$$$";
 
     for (int i = 0; i < test.length(); ++i) {
       parser.doAction(test.charAt(i));
     }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), "*");
+    Assert.assertNotNull(polymer.getMonomerNotation(1));
+    Assert.assertNull(polymer.getMonomerNotation(2));
+    Assert.assertEquals(polymer.getCarbEdges().size(), 0);
+  }
+
+  @Test
+  public void testCARBPolymerUnknownMonomerMidChainBreaksEdges() throws ExceptionState {
+    parser = new StateMachineParser();
+    // An unknown monomer ("X") mid-chain has no connection points, so no bond can
+    // be resolved into or out of it: neither the (1->X) nor the (X->3) linkage is
+    // emitted. Only the three real monomers get positions; there are zero edges.
+    String inner = "[a-D-Glcp].X.R4:[a-D-Glcp]";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+    Assert.assertNotNull(polymer.getMonomerNotation(3));
+    Assert.assertEquals(polymer.getCarbEdges().size(), 0);
+  }
+
+  @Test
+  public void testCARBPolymerMixtureGroup() throws ExceptionState {
+    parser = new StateMachineParser();
+    // A mixture "([a-D-Glcp]+[b-D-Glcp])" is an ambiguity group: it parses into a
+    // MonomerNotationGroupMixture, round-trips, occupies one position, and emits
+    // no concrete edge (its connectivity is unresolvable).
+    String inner = "([a-D-Glcp]+[b-D-Glcp])";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertTrue(polymer.getPolymerElements().getListOfElements().get(0)
+        instanceof org.helm.notation2.parser.notation.polymer.MonomerNotationGroupMixture);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+    Assert.assertNotNull(polymer.getMonomerNotation(1));
+    Assert.assertEquals(polymer.getCarbEdges().size(), 0);
+  }
+
+  @Test
+  public void testCARBPolymerOrGroup() throws ExceptionState {
+    parser = new StateMachineParser();
+    // An or-group "([a-D-Glcp],[b-D-Glcp])" parses into a MonomerNotationGroupOr.
+    String inner = "([a-D-Glcp],[b-D-Glcp])";
+    String test = "CARB1{" + inner + "}$$$$";
+
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertTrue(polymer.getPolymerElements().getListOfElements().get(0)
+        instanceof org.helm.notation2.parser.notation.polymer.MonomerNotationGroupOr);
+    Assert.assertEquals(polymer.toHELM2(), inner);
+    Assert.assertEquals(polymer.getCarbEdges().size(), 0);
   }
 
   @Test

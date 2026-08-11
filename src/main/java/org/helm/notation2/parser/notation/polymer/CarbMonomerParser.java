@@ -26,8 +26,11 @@ import org.helm.notation2.parser.exceptionparser.NotationException;
 public class CarbMonomerParser {
 
   // baseName may contain letters, digits, and the punctuation CarbBank names use
-  // for substituent/ring-size suffixes and locant lists (e.g. "4-en-4-deoxy-thrHexpA", "2,6-deoxy-ribHexp")
-  private static final String BASE_NAME = "[A-Za-z0-9][A-Za-z0-9,\\-]*";
+  // for substituent/ring-size suffixes and locant lists (e.g. "4-en-4-deoxy-thrHexpA", "2,6-deoxy-ribHexp").
+  // Hyphens and commas are only ever internal separators, so the name must both
+  // start and end with an alphanumeric character - a trailing "-"/"," (e.g. "Gal-")
+  // is malformed and must be rejected, not silently accepted.
+  private static final String BASE_NAME = "[A-Za-z0-9](?:[A-Za-z0-9,\\-]*[A-Za-z0-9])?";
 
   // Fully qualified: anomer-configuration-baseName, e.g. "b-D-Gal"
   private static final Pattern QUALIFIED_PATTERN =

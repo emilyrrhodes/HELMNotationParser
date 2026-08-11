@@ -30,6 +30,7 @@ import org.helm.notation2.parser.exceptionparser.NotationException;
 import org.helm.notation2.parser.notation.polymer.BlobEntity;
 import org.helm.notation2.parser.notation.polymer.CarbEntity;
 import org.helm.notation2.parser.notation.polymer.CarbMonomerNotationParser;
+import org.helm.notation2.parser.notation.polymer.CarbRepeat;
 import org.helm.notation2.parser.notation.polymer.ChemEntity;
 import org.helm.notation2.parser.notation.polymer.GroupEntity;
 import org.helm.notation2.parser.notation.polymer.HELMEntity;
@@ -71,16 +72,18 @@ public final class ValidationMethod {
 			throws NotationException {
 		if (type.equals("CARB")) {
 			/*
-			 * CARB monomers carry a leading "R<n>:" attachment prefix, an
-			 * optional trailing ":R<n>" anomeric override, and zero or more
-			 * trailing "(...)" branches, so the generic bracket-only check
-			 * below does not apply to them. Dispatch here, before the
-			 * "(...)"-group check, since CARB's grammar never legally starts
-			 * a token with "(" - a leading "(" (e.g. a mistakenly-written
-			 * ambiguity group) is rejected by parseToken itself with a clear
-			 * NotationException, since a valid token is only ever
-			 * "R<n>:"-prefixed or starts with "[".
+			 * A CARB monomer token carries a leading "R<n>:" attachment prefix,
+			 * an optional trailing ":R<n>" anomeric override, and zero or more
+			 * trailing "(...)" branches - it never legally STARTS with "(",
+			 * since branches are always written after the "[...]" residue. So a
+			 * token that starts with "(" is unambiguously a top-level
+			 * group/repeat, not a branch, and is routed accordingly; every
+			 * other token is a single monomer parsed by the recursive-descent
+			 * token parser.
 			 */
+			if (str.startsWith("(")) {
+				return parseCarbGroupOrRepeat(str, type);
+			}
 			return CarbMonomerNotationParser.parseToken(str, type);
 		}
 		MonomerNotation mon;
@@ -133,6 +136,60 @@ public final class ValidationMethod {
 
 		}
 		return mon;
+	}
+
+	/**
+	 * Routes a CARB token that starts with "(" - a top-level group or repeat, never
+	 * a branch (see {@link #decideWhichMonomerNotation}). A top-level "+" makes it a
+	 * mixture, a top-level "," makes it an or-group; otherwise the parenthesised
+	 * content is a plain CARB sub-chain that forms a repeating group.
+	 *
+	 * @param str the token, e.g. "(R4:[a-D-Glcp].R3:[a-D-Glcp])" or "([a-D-Glcp]+[b-D-Glcp])"
+	 * @param type polymer type, always "CARB"
+	 * @return the parsed group / or-group / repeat notation
+	 * @throws NotationException if the parentheses are unbalanced or the content is malformed
+	 */
+	private static MonomerNotation parseCarbGroupOrRepeat(String str, String type) throws NotationException {
+		if (!str.endsWith(")")) {
+			throw new NotationException("CARB group/repeat is missing a closing parenthesis: " + str);
+		}
+		String inner = str.substring(1, str.length() - 1);
+		/* A top-level "+" is a mixture, a top-level "," an or-group - both reuse the
+		 * shared ambiguity-group classes, whose elements are each parsed as CARB
+		 * monomers via decideWhichMonomerNotation. Otherwise the parenthesised content
+		 * is a plain CARB sub-chain forming a repeating group. */
+		if (containsTopLevel(inner, '+')) {
+			return new MonomerNotationGroupMixture(inner, type);
+		}
+		if (containsTopLevel(inner, ',')) {
+			return new MonomerNotationGroupOr(inner, type);
+		}
+		return new CarbRepeat(inner, type);
+	}
+
+	/**
+	 * @param str string to scan
+	 * @param target the character to look for
+	 * @return true if {@code target} occurs at bracket/paren depth 0
+	 */
+	private static boolean containsTopLevel(String str, char target) {
+		int bracketDepth = 0;
+		int parenDepth = 0;
+		for (int i = 0; i < str.length(); i++) {
+			char c = str.charAt(i);
+			if (c == '[') {
+				bracketDepth++;
+			} else if (c == ']') {
+				bracketDepth--;
+			} else if (c == '(') {
+				parenDepth++;
+			} else if (c == ')') {
+				parenDepth--;
+			} else if (c == target && bracketDepth == 0 && parenDepth == 0) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	/**

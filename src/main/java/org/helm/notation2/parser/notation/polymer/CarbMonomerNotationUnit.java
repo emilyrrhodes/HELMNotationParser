@@ -24,8 +24,11 @@ public class CarbMonomerNotationUnit extends MonomerNotation {
   /** R-group on this monomer that the previous monomer's anomeric carbon bonds into; null for the very first monomer in a chain or the first monomer of a branch. */
   private final String incomingRGroup;
 
-  /** This monomer's own anomeric (donor) R-group; "R1" unless overridden for a ketose. */
+  /** This monomer's own anomeric (donor) R-group; "R1" unless overridden for a ketose; null for an unknown monomer, which carries no connection points. */
   private final String anomericRGroup;
+
+  /** True for a fully-unknown monomer ("X", "*", or "?"), which per the proposal has no connection points and so participates in no bonds. */
+  private final boolean unknown;
 
   private final List<CarbBranch> branches = new ArrayList<CarbBranch>();
 
@@ -36,9 +39,31 @@ public class CarbMonomerNotationUnit extends MonomerNotation {
    * @param anomericRGroup this monomer's own anomeric R-group; defaults to "R1" if null
    */
   public CarbMonomerNotationUnit(String residue, String type, String incomingRGroup, String anomericRGroup) {
+    this(residue, type, incomingRGroup, anomericRGroup, false);
+  }
+
+  /**
+   * @param residue the residue notation - bracketed for a known monomer, or a bare
+   *          "X"/"*"/"?" for an unknown one
+   * @param type polymer type, always "CARB"
+   * @param incomingRGroup R-group receiving the bond from the previous monomer, or null if none
+   * @param anomericRGroup this monomer's own anomeric R-group; defaults to "R1" if null,
+   *          unless {@code unknown} is set, in which case it is left null (no connection points)
+   * @param unknown true for a fully-unknown monomer, which carries no connection points
+   */
+  public CarbMonomerNotationUnit(String residue, String type, String incomingRGroup, String anomericRGroup, boolean unknown) {
     super(residue, type);
+    this.unknown = unknown;
     this.incomingRGroup = incomingRGroup;
-    this.anomericRGroup = (anomericRGroup == null) ? "R1" : anomericRGroup;
+    this.anomericRGroup = unknown ? anomericRGroup : ((anomericRGroup == null) ? "R1" : anomericRGroup);
+  }
+
+  /**
+   * @return true if this is a fully-unknown monomer ("X", "*", or "?"), which
+   *         carries no connection points and participates in no bonds
+   */
+  public boolean isUnknown() {
+    return unknown;
   }
 
   public String getIncomingRGroup() {
@@ -63,6 +88,15 @@ public class CarbMonomerNotationUnit extends MonomerNotation {
   @Override
   public String toHELM2() {
     StringBuilder sb = new StringBuilder();
+    if (unknown) {
+      // A fully-unknown monomer is just its bare token ("X"/"*"/"?") - no
+      // attachment prefix, no anomeric override, no branches.
+      sb.append(unit);
+      if (isAnnotationTrue()) {
+        sb.append('"').append(getAnnotation()).append('"');
+      }
+      return sb.toString();
+    }
     if (incomingRGroup != null) {
       sb.append(incomingRGroup).append(':');
     }

@@ -51,4 +51,15 @@ public class CarbMonomerParserTest {
     CarbMonomerParser.parse("???");
   }
 
+  @Test(expectedExceptions = NotationException.class)
+  public void testTrailingHyphenBaseNameIsRejected() throws NotationException {
+    // hyphens/commas are internal separators only - a trailing "-" is malformed
+    CarbMonomerParser.parse("Gal-");
+  }
+
+  @Test(expectedExceptions = NotationException.class)
+  public void testTrailingCommaBaseNameIsRejected() throws NotationException {
+    CarbMonomerParser.parse("a-D-Gal,");
+  }
+
 }

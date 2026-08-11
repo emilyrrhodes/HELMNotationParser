@@ -218,7 +218,12 @@ public class StateMachineParser implements State {
    * @return true if the information is valid, false otherwise
    */
   public boolean checkRepeating(String str) {
-    String pattern = "\\d+|\\d+-\\d+";
+    // A concrete integer ("3"), an integer range ("3-5"), or - per the CARB
+    // proposal's repeating-group syntax - the open-ended forms "n" and "3-n".
+    // Non-integer counts are accepted by the grammar but are a build-time dead
+    // end (they throw HELM2HandledException when a concrete molecule is built),
+    // exactly as they already do for the other polymer types.
+    String pattern = "\\d+|\\d+-\\d+|n|\\d+-n";
     if (str.matches(pattern)) {
       return true;
     }
@@ -247,10 +252,17 @@ public class StateMachineParser implements State {
   }
 
   /**
-   * method to check if the last added polymer element is a peptide or a rna
+   * method to check if the last added polymer allows a multi-monomer body (its
+   * monomers separated by ".").
    *
-   * @return true, if the last added polymer is a peptide or a rna, false
-   *         otherwise
+   * <p>Despite the historical name, this returns true for PEPTIDE, RNA <em>and</em>
+   * CARB: all three are chain polymers whose body is a "."-separated monomer
+   * sequence, unlike CHEM/BLOB. The name is kept for backwards compatibility with
+   * existing callers; read it as "does this polymer type have a multi-monomer
+   * chain body?".
+   *
+   * @return true if the last added polymer is a peptide, an rna, or a carb;
+   *         false otherwise
    * @throws SimplePolymerSectionException if list of polymers is null
    */
   public boolean isPeptideOrRna() throws SimplePolymerSectionException {
