@@ -155,7 +155,12 @@ public final class CarbMonomerNotationParser {
 
     List<CarbMonomerNotationUnit> chain = new ArrayList<CarbMonomerNotationUnit>();
     for (int i = 0; i < segments.size() - 1; i++) {
-      chain.add(parseToken(segments.get(i), type));
+      CarbMonomerNotationUnit unit = parseToken(segments.get(i), type);
+      if (i == 0 && unit.getIncomingRGroup() != null) {
+        throw new NotationException(
+            "The first monomer in a CARB branch cannot have an incoming R-group: " + segments.get(i));
+      }
+      chain.add(unit);
     }
     if (chain.isEmpty()) {
       throw new NotationException("CARB branch has no monomers: (" + content + ")");

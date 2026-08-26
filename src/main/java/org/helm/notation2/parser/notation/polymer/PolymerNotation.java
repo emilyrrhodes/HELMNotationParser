@@ -333,6 +333,19 @@ public final class PolymerNotation {
    * @return the position assigned to {@code unit}
    */
   private int numberCarbUnit(CarbMonomerNotationUnit unit, int[] counter, int precedingPosition) {
+    if (!unit.hasIntegerCount()) {
+      numberCarbUnitNoEdges(unit, counter);
+      return 0;
+    }
+    int times = Integer.parseInt(unit.getCount().trim());
+    int lastPosition = precedingPosition;
+    for (int i = 0; i < times; i++) {
+      lastPosition = numberCarbUnitOnce(unit, counter, lastPosition);
+    }
+    return lastPosition;
+  }
+
+  private int numberCarbUnitOnce(CarbMonomerNotationUnit unit, int[] counter, int precedingPosition) {
     counter[0]++;
     int position = counter[0];
     mapOfMonomers.put(position, unit);
@@ -364,6 +377,16 @@ public final class PolymerNotation {
     }
 
     return position;
+  }
+
+  private void numberCarbUnitNoEdges(CarbMonomerNotationUnit unit, int[] counter) {
+    counter[0]++;
+    mapOfMonomers.put(counter[0], unit);
+    for (CarbBranch branch : unit.getBranches()) {
+      for (CarbMonomerNotationUnit branchUnit : branch.getChain()) {
+        numberCarbUnitNoEdges(branchUnit, counter);
+      }
+    }
   }
 
   /**

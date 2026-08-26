@@ -379,6 +379,38 @@ public class PolymerNotationTest {
     }
   }
 
+  @Test
+  public void testCARBDirectMonomerCountIsExpandedAndRoundTrips() throws ExceptionState {
+    parser = new StateMachineParser();
+    String test = "CARB1{[a-D-Glcp]'3'}$$$$";
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+    org.helm.notation2.parser.notation.polymer.PolymerNotation polymer =
+        parser.notationContainer.getListOfPolymers().get(0);
+    Assert.assertEquals(polymer.toHELM2(), "[a-D-Glcp]'3'");
+    Assert.assertEquals(polymer.getListMonomers().size(), 3);
+    Assert.assertEquals(polymer.getCarbEdges().size(), 2);
+  }
+
+  @Test(expectedExceptions = org.helm.notation2.parser.exceptionparser.SimplePolymerSectionException.class)
+  public void testOpenEndedRepeatIsRejectedForPeptide() throws ExceptionState {
+    parser = new StateMachineParser();
+    String test = "PEPTIDE1{(A)'n'}$$$$";
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+  }
+
+  @Test(expectedExceptions = org.helm.notation2.parser.exceptionparser.NotationException.class)
+  public void testCARBBranchFirstIncomingRGroupIsRejected() throws ExceptionState {
+    parser = new StateMachineParser();
+    String test = "CARB1{[a-D-Glcp](R3:[a-D-Glcp].R2)}$$$$";
+    for (int i = 0; i < test.length(); ++i) {
+      parser.doAction(test.charAt(i));
+    }
+  }
+
   /*
    * method to test unchanged input in the simple polymer section
    */

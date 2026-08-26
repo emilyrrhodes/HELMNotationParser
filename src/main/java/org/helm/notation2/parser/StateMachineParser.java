@@ -218,16 +218,19 @@ public class StateMachineParser implements State {
    * @return true if the information is valid, false otherwise
    */
   public boolean checkRepeating(String str) {
-    // A concrete integer ("3"), an integer range ("3-5"), or - per the CARB
-    // proposal's repeating-group syntax - the open-ended forms "n" and "3-n".
-    // Non-integer counts are accepted by the grammar but are a build-time dead
-    // end (they throw HELM2HandledException when a concrete molecule is built),
-    // exactly as they already do for the other polymer types.
-    String pattern = "\\d+|\\d+-\\d+|n|\\d+-n";
+    String pattern = "\\d+|\\d+-\\d+";
+    if (isCarbPolymer()) {
+      pattern += "|n|\\d+-n";
+    }
     if (str.matches(pattern)) {
       return true;
     }
     return false;
+  }
+
+  private boolean isCarbPolymer() {
+    return polymerElements.size() >= 1
+        && polymerElements.get(polymerElements.size() - 1).matches("CARB[1-9][0-9]*");
   }
 
   /**

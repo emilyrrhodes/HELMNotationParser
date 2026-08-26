@@ -3,8 +3,11 @@ package org.helm.notation2.parser.notation.polymer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.regex.Pattern;
 
 import org.helm.notation2.parser.exceptionparser.HELM1ConverterException;
+
+import com.fasterxml.jackson.annotation.JsonIgnore;
 
 /**
  * A single CARB (carbohydrate) monomer within a polymer chain, together with
@@ -20,6 +23,8 @@ import org.helm.notation2.parser.exceptionparser.HELM1ConverterException;
  * described in {@link CarbMonomerNotationParser}.
  */
 public class CarbMonomerNotationUnit extends MonomerNotation {
+
+  private static final Pattern INTEGER_COUNT = Pattern.compile("\\d+");
 
   /** R-group on this monomer that the previous monomer's anomeric carbon bonds into; null for the very first monomer in a chain or the first monomer of a branch. */
   private final String incomingRGroup;
@@ -83,6 +88,25 @@ public class CarbMonomerNotationUnit extends MonomerNotation {
   }
 
   /**
+   * @return true when this known CARB monomer has a concrete positive integer
+   *         count that can be expanded into a molecule
+   */
+  @JsonIgnore
+  public boolean hasIntegerCount() {
+    if (unknown) {
+      return false;
+    }
+    if (!INTEGER_COUNT.matcher(getCount().trim()).matches()) {
+      return false;
+    }
+    try {
+      return Integer.parseInt(getCount().trim()) >= 1;
+    } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  /**
    * {@inheritDoc}
    */
   @Override
@@ -106,6 +130,9 @@ public class CarbMonomerNotationUnit extends MonomerNotation {
     }
     for (CarbBranch branch : branches) {
       sb.append(branch.toHELM2());
+    }
+    if (!isDefault) {
+      sb.append('\'').append(count).append('\'');
     }
     if (isAnnotationTrue()) {
       sb.append('"').append(getAnnotation()).append('"');
